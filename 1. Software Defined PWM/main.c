@@ -10,7 +10,7 @@
 
 #include <msp430.h>
 
-unsigned short DutyCycle = 500;
+unsigned short DutyCycle = 0;
 
 
 int main(void)
@@ -20,13 +20,13 @@ int main(void)
     // Configure GPIO
     P1DIR |= BIT0;
     P1OUT &= ~BIT0;
-    
+
     P6DIR |= BIT6;
     P6OUT &= ~BIT6;
 
     // Configure P2.3 to an Input
     P2DIR &= ~BIT3;
-    P2REN |= BIT3;                  // Enable resistor on P2.3
+    P2REN |= BIT3; // Enable resistor on P2.3
     P2OUT |= BIT3;
     P2IES |= BIT3; // P2.3 High -> Low edge
     P2IE |= BIT3; // P2.3 interrupt enable
@@ -34,8 +34,12 @@ int main(void)
 
     // Configure P4.1 to an Input
     P4DIR &= ~BIT1;
-    P4REN |= BIT1;                  // Enable resistor on P4.1
+    P4REN |= BIT1; // Enable resistor on P4.1
     P4OUT |= BIT1;
+    P4IES |= BIT1; // P2.3 High -> Low edge
+    P4IE |= BIT1; // P2.3 interrupt enable
+    P4IFG &= ~BIT1; // P2.3 IFG cleared
+
 
     // Disable the GPIO power-on default high-impedance mode to activate
     // previously configured port settings
@@ -45,8 +49,10 @@ int main(void)
     TB0CTL = TBSSEL_2 | MC_1 | TBCLR | TBIE;      // SMCLK, up mode, clear TBR, enable interrupt
 
     TB0CCTL1 |= CCIE;                             // Enable TB0 CCR1 Interrupt
+    TB0CCTL2 |= CCIE;                             // Enable TB0 CCR1 Interrupt
 
     TB0CCR1 = DutyCycle;                          // Set CCR1 to the value to set the duty cycle
+    TB0CCR2 = DutyCycle;                          // Set CCR2 to the value to set the duty cycle
     TB0CCR0 = 999;                                // Set CCRO to double CCR1
     __bis_SR_register(LPM3_bits | GIE);           // Enter LPM3, enable interrupts
     __no_operation();                             // For debugger
@@ -70,9 +76,11 @@ void __attribute__ ((interrupt(TIMER0_B1_VECTOR))) TIMER0_B1_ISR (void)
             P1OUT &= ~BIT0;
             break;                               // CCR1 Set the pin to a 0
         case TB0IV_TBCCR2:
-            break;                               // CCR2 not used
+            P6OUT &= ~BIT6;
+            break;                               // CCR2 Set the pin to a 0
         case TB0IV_TBIFG:
             P1OUT |= BIT0;                       // overflow Set the pin to a 1
+            P6OUT |= BIT6;                       // overflow Set the pin to a 1
             break;
         default:
             break;
@@ -86,4 +94,13 @@ __interrupt void Port_2(void)
         TB0CCR1 = 0;
     else
     TB0CCR1 += 100;
+}
+#pragma vector=PORT4_VECTOR
+__interrupt void Port_4(void)
+{
+    P4IFG &= ~BIT1;                         // Clear P1.3 IFG
+    if (TB0CCR2 >= 999)
+        TB0CCR2 = 30;
+    else
+    TB0CCR2 += 100;
 }
